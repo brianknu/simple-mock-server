@@ -16,12 +16,12 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
             "name": "bk9"
         },
         "headers": {
+            "Content-Type": "application/json",
             "key": "value", 
-            "anotherkey": 123
+            "anotherkey": "123"
         },
-        "discard_query_params": false
+        "status": 267
     }
-
 
 ## Run
 `go run ./...` in the proyect root.
