@@ -30,4 +30,4 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
 - Status: Status code to return.
 
 ## Run
-`go run ./...` in the proyect root.
+`go run ./cmd/api/main.go -port=8088` in the proyect root.
