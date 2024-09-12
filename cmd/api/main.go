@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,9 @@ import (
 )
 
 func main() {
-	port := ":8080"
+	portFlag := flag.String("port", "8081", "Server port")
+	flag.Parse()
+	port := ":" + *portFlag
 	mocks := mock.LoadMocksFromFS()
 	router.RegisterMocks(mocks)
 	fmt.Printf("Starting server on %s.", port)

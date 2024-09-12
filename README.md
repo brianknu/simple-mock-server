@@ -23,5 +23,11 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
         "status": 267
     }
 
+- Paths: paths to match.
+- Verb: REST verb to match.
+- Body: Response body of the API.
+- Headers: Response headers of the API.
+- Status: Status code to return.
+
 ## Run
-`go run ./...` in the proyect root.
+`go run ./cmd/api/main.go -port=8088` in the proyect root.
