@@ -15,12 +15,10 @@ type Mock struct {
 	Status  int               `json:"status"`
 }
 
-func LoadMocksFromFS() []Mock {
-	directory := os.Getenv("SIMPLE_MOCKS_LOCATION")
+func LoadMocksFromFS(directory string) ([]Mock, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
-		fmt.Printf("Unable to load simple mock directory. Directory: '%s'.\nError: %s.", directory, err)
-		return nil
+		return nil, err
 	}
 	mocks := []Mock{}
 	for _, file := range files {
@@ -42,5 +40,5 @@ func LoadMocksFromFS() []Mock {
 			mocks = append(mocks, mock)
 		}
 	}
-	return mocks
+	return mocks, nil
 }
