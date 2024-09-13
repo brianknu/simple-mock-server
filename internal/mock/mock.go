@@ -2,7 +2,7 @@ package mock
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -24,17 +24,17 @@ func LoadMocksFromFS(directory string) ([]Mock, error) {
 	for _, file := range files {
 		if filepath.Ext(file.Name()) == ".json" {
 			filePath := filepath.Join(directory, file.Name())
-			fmt.Printf("Reading file: %s\n", filePath)
+			log.Printf("Using %s\n", filePath)
 
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				fmt.Printf("Error reading file %s: %s\n", filePath, err)
+				log.Printf("Error reading file %s: %s\n", filePath, err)
 				continue
 			}
 
 			var mock Mock
 			if err := json.Unmarshal(content, &mock); err != nil {
-				fmt.Printf("Error unmarshalling JSON in file %s: %s\n", filePath, err)
+				log.Printf("Error unmarshalling JSON in file %s: %s\n", filePath, err)
 				continue
 			}
 			mocks = append(mocks, mock)
