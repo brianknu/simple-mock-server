@@ -3,7 +3,7 @@ Local server to mock API calls to an external service.
 
 # Installation
 ## Env variables
-Set SIMPLE_MOCKS_LOCATION environment variable with the directory of your json files.
+Set SIMPLE_MOCKS_LOCATION environment variable with the directory of your json files or use the -d flag.
 
 REMEMBER TO USE THE .json EXTENSION in each mock!
 
@@ -30,4 +30,4 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
 - Status: Status code to return.
 
 ## Run
-`go run ./cmd/api/main.go -port=8088` in the proyect root.
+`go run ./cmd/api/main.go -p=<port> -d=<path-to-mocks>` in the proyect root.

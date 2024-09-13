@@ -2,7 +2,7 @@ package mock
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -15,32 +15,30 @@ type Mock struct {
 	Status  int               `json:"status"`
 }
 
-func LoadMocksFromFS() []Mock {
-	directory := os.Getenv("SIMPLE_MOCKS_LOCATION")
+func LoadMocksFromFS(directory string) ([]Mock, error) {
 	files, err := os.ReadDir(directory)
 	if err != nil {
-		fmt.Printf("Unable to load simple mock directory. Directory: '%s'.\nError: %s.", directory, err)
-		return nil
+		return nil, err
 	}
 	mocks := []Mock{}
 	for _, file := range files {
 		if filepath.Ext(file.Name()) == ".json" {
 			filePath := filepath.Join(directory, file.Name())
-			fmt.Printf("Reading file: %s\n", filePath)
+			log.Printf("Using %s\n", filePath)
 
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				fmt.Printf("Error reading file %s: %s\n", filePath, err)
+				log.Printf("Error reading file %s: %s\n", filePath, err)
 				continue
 			}
 
 			var mock Mock
 			if err := json.Unmarshal(content, &mock); err != nil {
-				fmt.Printf("Error unmarshalling JSON in file %s: %s\n", filePath, err)
+				log.Printf("Error unmarshalling JSON in file %s: %s\n", filePath, err)
 				continue
 			}
 			mocks = append(mocks, mock)
 		}
 	}
-	return mocks
+	return mocks, nil
 }
