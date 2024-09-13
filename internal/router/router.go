@@ -2,6 +2,7 @@ package router
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"simple-mock-server/internal/mock"
@@ -18,7 +19,16 @@ func RegisterMocks(mocks []mock.Mock) {
 					}
 					w.WriteHeader(mock.Status)
 					json.NewEncoder(w).Encode(response)
-					log.Printf("%s %s", mock.Verb, r.RequestURI)
+
+					if mock.PrintRequestBody {
+						if b, err := io.ReadAll(r.Body); err == nil {
+							log.Printf("%s %s\n%s", mock.Verb, r.RequestURI, string(b))
+						} else {
+							log.Printf("%s %s. Unable to print mock body: %s.", mock.Verb, r.RequestURI, err)
+						}
+					} else {
+						log.Printf("%s %s", mock.Verb, r.RequestURI)
+					}
 				} else {
 					w.WriteHeader(http.StatusMethodNotAllowed)
 				}

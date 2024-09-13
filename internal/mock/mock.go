@@ -8,11 +8,12 @@ import (
 )
 
 type Mock struct {
-	Paths   []string          `json:"paths"`
-	Verb    string            `json:"verb"`
-	Body    any               `json:"body"`
-	Headers map[string]string `json:"headers"`
-	Status  int               `json:"status"`
+	Paths            []string          `json:"paths"`
+	Verb             string            `json:"verb"`
+	Body             any               `json:"body"`
+	Headers          map[string]string `json:"headers"`
+	Status           int               `json:"status"`
+	PrintRequestBody bool              `json:"print_request_body"`
 }
 
 func LoadMocksFromFS(directory string) ([]Mock, error) {
