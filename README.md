@@ -10,7 +10,7 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
 ## JSON mock format
     {
         "paths": ["/some/hardcoded/path", "/another/hardcoded/path"],
-        "verb": "GET",
+        "verb": "POST",
         "body": {
             "user": 123,
             "name": "bk9"
@@ -20,7 +20,8 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
             "key": "value", 
             "anotherkey": "123"
         },
-        "status": 267
+        "status": 200,
+        "print_request_body": true
     }
 
 - Paths: paths to match.
@@ -28,6 +29,7 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
 - Body: Response body of the API.
 - Headers: Response headers of the API.
 - Status: Status code to return.
+- Print request body: Print request body to STDOUT 
 
 ## Run
 `go run ./cmd/api/main.go -p=<port> -d=<path-to-mocks>` in the proyect root.
