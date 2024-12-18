@@ -21,7 +21,8 @@ REMEMBER TO USE THE .json EXTENSION in each mock!
             "anotherkey": "123"
         },
         "status": 200,
-        "print_request_body": true
+        "print_request_body": true,
+        "response_time" 100
     }
 
 - Paths: paths to match.
