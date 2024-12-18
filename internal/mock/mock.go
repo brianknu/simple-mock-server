@@ -14,6 +14,7 @@ type Mock struct {
 	Headers          map[string]string `json:"headers"`
 	Status           int               `json:"status"`
 	PrintRequestBody bool              `json:"print_request_body"`
+	ResponseTime	 int			   `json:"response_time"`
 }
 
 func LoadMocksFromFS(directory string) ([]Mock, error) {

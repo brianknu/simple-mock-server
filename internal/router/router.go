@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"simple-mock-server/internal/mock"
+	"time"
 )
 
 func RegisterMocks(mocks []mock.Mock) {
@@ -13,6 +14,9 @@ func RegisterMocks(mocks []mock.Mock) {
 		for _, path := range mock.Paths {
 			http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == mock.Verb {
+					if mock.ResponseTime > 0 {
+						time.Sleep(time.Duration(mock.ResponseTime) * time.Millisecond)
+					}
 					response := mock.Body
 					for hk, hv := range mock.Headers {
 						w.Header().Set(hk, hv)
