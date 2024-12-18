@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"simple-mock-server/internal/mock"
+	"time"
 )
 
 func RegisterMocks(mocks []mock.Mock) {
@@ -16,6 +17,9 @@ func RegisterMocks(mocks []mock.Mock) {
 					response := mock.Body
 					for hk, hv := range mock.Headers {
 						w.Header().Set(hk, hv)
+					}
+					if mock.ResponseTime > 0 {
+						time.Sleep(time.Duration(mock.ResponseTime) * time.Millisecond)
 					}
 					w.WriteHeader(mock.Status)
 					json.NewEncoder(w).Encode(response)
