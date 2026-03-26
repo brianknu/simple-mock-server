@@ -115,10 +115,8 @@ func serveMock(w http.ResponseWriter, r *http.Request, m mock.Mock, logger Reque
 	json.NewEncoder(w).Encode(m.Body)
 
 	var bodyStr string
-	if m.PrintRequestBody {
-		if b, err := io.ReadAll(r.Body); err == nil {
-			bodyStr = string(b)
-		}
+	if b, err := io.ReadAll(r.Body); err == nil {
+		bodyStr = string(b)
 	}
 
 	entry := RequestEntry{

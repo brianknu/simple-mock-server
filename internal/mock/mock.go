@@ -15,7 +15,6 @@ type Mock struct {
 	Body             any               `json:"body"`
 	Headers          map[string]string `json:"headers"`
 	Status           int               `json:"status"`
-	PrintRequestBody bool              `json:"print_request_body"`
 	ResponseTime     int               `json:"response_time"`
 	Disabled         bool              `json:"disabled,omitempty"`
 	SourceFile       string            `json:"-"`

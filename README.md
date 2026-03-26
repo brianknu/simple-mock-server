@@ -73,7 +73,6 @@ Each `.json` file in the mocks directory defines one mock:
         "users": [{ "id": 1, "name": "alice" }]
     },
     "response_time": 150,
-    "print_request_body": false,
     "disabled": false
 }
 ```
@@ -86,7 +85,6 @@ Each `.json` file in the mocks directory defines one mock:
 | `headers` | `object` | Response headers |
 | `body` | `any` | JSON response body |
 | `response_time` | `int` | Delay in milliseconds before responding |
-| `print_request_body` | `bool` | Print the incoming request body to the log |
 | `disabled` | `bool` | When `true`, the mock is loaded but not served (omit to default to enabled) |
 
 > Multiple JSON files can define mocks for the same path + verb. The TUI will ask you to pick one on each request.

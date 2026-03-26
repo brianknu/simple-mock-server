@@ -20,6 +20,7 @@ type keyMap struct {
 	Down     key.Binding
 	Capture  key.Binding
 	Toggle   key.Binding
+	Copy     key.Binding
 }
 
 var keys = keyMap{
@@ -90,5 +91,9 @@ var keys = keyMap{
 	Toggle: key.NewBinding(
 		key.WithKeys(" "),
 		key.WithHelp("space", "enable/disable mock"),
+	),
+	Copy: key.NewBinding(
+		key.WithKeys("y"),
+		key.WithHelp("y", "copy body"),
 	),
 }
