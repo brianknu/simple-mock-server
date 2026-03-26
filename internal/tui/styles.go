@@ -52,6 +52,16 @@ var (
 	methodDefaultStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("252")).
 				Bold(true)
+
+	captureIndicatorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("208")).
+				Bold(true)
+
+	liveRequestBannerStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("208")).
+				Foreground(lipgloss.Color("0")).
+				Bold(true).
+				Padding(0, 1)
 )
 
 func methodStyle(method string) lipgloss.Style {

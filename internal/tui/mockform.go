@@ -43,6 +43,9 @@ type mockFormModel struct {
 	width        int
 	message      string
 	sourceFile   string
+
+	isPendingResponse bool
+	pendingInfo       string
 }
 
 type mockSavedMsg string
@@ -279,12 +282,43 @@ func (m mockFormModel) save() tea.Cmd {
 	}
 }
 
+func (m mockFormModel) buildResponse() server.PendingResponse {
+	status, _ := strconv.Atoi(m.statusInput.Value())
+	if status == 0 {
+		status = 200
+	}
+
+	headers := make(map[string]string)
+	for _, line := range strings.Split(m.headersArea.Value(), "\n") {
+		if parts := strings.SplitN(line, ":", 2); len(parts) == 2 {
+			headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		}
+	}
+
+	bodyStr := strings.TrimSpace(m.bodyArea.Value())
+	var body []byte
+	if bodyStr != "" {
+		body = []byte(bodyStr)
+	}
+
+	return server.PendingResponse{
+		Status:  status,
+		Headers: headers,
+		Body:    body,
+	}
+}
+
 func (m mockFormModel) View() string {
 	if !m.editing {
 		return "  Press 'n' on the Mocks tab to create a new mock, or 'e' to edit one.\n  You can also press Enter here to start a new mock."
 	}
 
 	var b strings.Builder
+
+	if m.isPendingResponse {
+		b.WriteString(liveRequestBannerStyle.Render("LIVE REQUEST: " + m.pendingInfo + " is waiting for your response"))
+		b.WriteString("\n\n")
+	}
 
 	title := "Create New Mock"
 	if m.editIndex >= 0 {

@@ -17,6 +17,7 @@ type keyMap struct {
 	Back      key.Binding
 	Up        key.Binding
 	Down      key.Binding
+	Capture key.Binding
 }
 
 var keys = keyMap{
@@ -75,5 +76,9 @@ var keys = keyMap{
 	Down: key.NewBinding(
 		key.WithKeys("down"),
 		key.WithHelp("↓", "down"),
+	),
+	Capture: key.NewBinding(
+		key.WithKeys("i"),
+		key.WithHelp("i", "toggle capture mode"),
 	),
 }

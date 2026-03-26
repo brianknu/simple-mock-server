@@ -20,6 +20,8 @@ const (
 
 var tabNames = []string{"Mocks", "Request Log", "Create/Edit"}
 
+type pendingRequestMsg server.PendingRequest
+
 type Model struct {
 	srv       *server.Server
 	activeTab int
@@ -30,7 +32,9 @@ type Model struct {
 	reqLog   requestLogModel
 	mockForm mockFormModel
 
-	showHelp bool
+	showHelp      bool
+	captureMode bool
+	pendingReq    *server.PendingRequest
 }
 
 func NewModel(srv *server.Server) Model {
@@ -47,6 +51,16 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.reqLog.waitForEntry(),
 	)
+}
+
+func (m Model) waitForPending() tea.Cmd {
+	return func() tea.Msg {
+		pr, ok := <-m.srv.PendingCh
+		if !ok {
+			return nil
+		}
+		return pendingRequestMsg(pr)
+	}
 }
 
 // inputActive returns true when a text input has focus and single-char keys
@@ -78,6 +92,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeTab == tabMockForm {
 				m.mockForm.editing = false
 				m.activeTab = tabMockList
+				// Cancel pending request if any
+				if m.pendingReq != nil {
+					m.pendingReq.ResponseCh <- server.PendingResponse{Cancel: true}
+					m.pendingReq = nil
+					m.srv.NextPending()
+				}
 				return m, nil
 			}
 		}
@@ -99,6 +119,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, keys.ShiftTab) {
 				m.activeTab = (m.activeTab - 1 + tabCount) % tabCount
 				m.onTabSwitch()
+				return m, nil
+			}
+			if key.Matches(msg, keys.Capture) && m.activeTab != tabMockForm {
+				m.captureMode = !m.captureMode
+				m.srv.SetCaptureMode(m.captureMode)
+				if m.captureMode {
+					return m, m.waitForPending()
+				}
 				return m, nil
 			}
 		}
@@ -126,11 +154,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reqLog, cmd = m.reqLog.Update(msg)
 		return m, cmd
 
+	case pendingRequestMsg:
+		pr := server.PendingRequest(msg)
+		m.pendingReq = &pr
+
+		form := newMockFormModel(m.srv)
+		form.width = m.width
+		form.isPendingResponse = true
+		form.pendingInfo = fmt.Sprintf("%s %s", pr.Method, pr.Path)
+		// Set verb from request
+		for i, v := range verbs {
+			if v == pr.Method {
+				form.verbIndex = i
+				break
+			}
+		}
+		form.pathsInput.SetValue(pr.Path)
+		form.startEditing()
+		m.mockForm = form
+		m.activeTab = tabMockForm
+		return m, m.mockForm.Init()
+
 	case mockSavedMsg:
 		m.mockList.mocks = m.srv.Mocks()
 		m.mockList.message = string(msg)
 		m.mockForm.editing = false
 		m.activeTab = tabMockList
+
+		if m.pendingReq != nil {
+			resp := m.mockForm.buildResponse()
+			m.pendingReq.ResponseCh <- resp
+			m.pendingReq = nil
+			m.srv.NextPending()
+			return m, m.waitForPending()
+		}
 		return m, nil
 	}
 
@@ -183,7 +240,14 @@ func (m Model) View() string {
 
 	// Status bar
 	b.WriteString("\n")
-	status := fmt.Sprintf(" :%d | %d mocks loaded | ? help", m.srv.Port, m.srv.MockCount())
+	indicator := ""
+	if m.captureMode {
+		indicator = " | " + captureIndicatorStyle.Render("CAPTURE")
+		if m.pendingReq != nil {
+			indicator += fmt.Sprintf(" | awaiting: %s %s", m.pendingReq.Method, m.pendingReq.Path)
+		}
+	}
+	status := fmt.Sprintf(" :%d | %d mocks loaded%s | ? help", m.srv.Port, m.srv.MockCount(), indicator)
 	b.WriteString(statusBarStyle.Width(m.width).Render(status))
 
 	return b.String()
@@ -227,6 +291,7 @@ func (m Model) helpView() string {
     esc                 Cancel and go back
 
   General
+    i                   Toggle capture mode
     q / ctrl+c          Quit
 `
 	return titleStyle.Render("Help") + help + "\n\n" + helpStyle.Render("  Press ? to close")

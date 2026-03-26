@@ -8,8 +8,9 @@ import (
 // DynamicMux is an HTTP request multiplexer that supports dynamic route
 // registration and removal at runtime. It is safe for concurrent use.
 type DynamicMux struct {
-	mu       sync.RWMutex
-	handlers map[string]http.HandlerFunc
+	mu              sync.RWMutex
+	handlers        map[string]http.HandlerFunc
+	NotFoundHandler http.HandlerFunc
 }
 
 func NewDynamicMux() *DynamicMux {
@@ -37,6 +38,8 @@ func (m *DynamicMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if ok {
 		handler(w, r)
+	} else if m.NotFoundHandler != nil {
+		m.NotFoundHandler(w, r)
 	} else {
 		http.NotFound(w, r)
 	}

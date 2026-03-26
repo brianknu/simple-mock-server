@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -12,6 +13,24 @@ import (
 	"simple-mock-server/internal/router"
 )
 
+// PendingRequest represents an unmatched HTTP request waiting for the user
+// to define a mock response via the TUI (capture mode).
+type PendingRequest struct {
+	Method     string
+	Path       string
+	Headers    http.Header
+	Body       string
+	ResponseCh chan PendingResponse
+}
+
+// PendingResponse is the response defined by the user for a pending request.
+type PendingResponse struct {
+	Status  int
+	Headers map[string]string
+	Body    []byte
+	Cancel  bool
+}
+
 type Server struct {
 	mu         sync.RWMutex
 	mocks      []mock.Mock
@@ -20,20 +39,62 @@ type Server struct {
 	MocksDir   string
 	Port       int
 	ReqLog     *RequestLog
+
+	captureMode bool
+	pendingMu     sync.Mutex
+	PendingCh     chan PendingRequest
+	pendingQueue  []*PendingRequest
 }
 
 func New(port int, mocksDir string) *Server {
 	mux := router.NewDynamicMux()
-	return &Server{
-		mux:      mux,
-		MocksDir: mocksDir,
-		Port:     port,
-		ReqLog:   NewRequestLog(1000),
+	s := &Server{
+		mux:       mux,
+		MocksDir:  mocksDir,
+		Port:      port,
+		ReqLog:    NewRequestLog(1000),
+		PendingCh: make(chan PendingRequest, 1),
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
 		},
 	}
+
+	mux.NotFoundHandler = func(w http.ResponseWriter, r *http.Request) {
+		if !s.CaptureMode() {
+			http.NotFound(w, r)
+			return
+		}
+
+		bodyBytes, _ := io.ReadAll(r.Body)
+
+		pr := &PendingRequest{
+			Method:     r.Method,
+			Path:       r.URL.Path,
+			Headers:    r.Header.Clone(),
+			Body:       string(bodyBytes),
+			ResponseCh: make(chan PendingResponse, 1),
+		}
+
+		s.EnqueuePending(pr)
+
+		select {
+		case resp := <-pr.ResponseCh:
+			if resp.Cancel {
+				http.NotFound(w, r)
+				return
+			}
+			for k, v := range resp.Headers {
+				w.Header().Set(k, v)
+			}
+			w.WriteHeader(resp.Status)
+			w.Write(resp.Body)
+		case <-r.Context().Done():
+			// Client disconnected; mock will still be saved if user completes the form
+		}
+	}
+
+	return s
 }
 
 // LoadAndRegister loads mocks from disk and registers them on the mux.
@@ -118,4 +179,53 @@ func (s *Server) MockCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.mocks)
+}
+
+// CaptureMode returns whether capture mode is enabled.
+func (s *Server) CaptureMode() bool {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	return s.captureMode
+}
+
+// SetCaptureMode toggles capture mode. When turning off, queued requests are cancelled.
+func (s *Server) SetCaptureMode(on bool) {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	s.captureMode = on
+	if !on {
+		// Flush queued requests with cancel
+		for _, pr := range s.pendingQueue {
+			select {
+			case pr.ResponseCh <- PendingResponse{Cancel: true}:
+			default:
+			}
+		}
+		s.pendingQueue = nil
+	}
+}
+
+// EnqueuePending sends a pending request to the TUI or queues it if the TUI is busy.
+func (s *Server) EnqueuePending(pr *PendingRequest) {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	select {
+	case s.PendingCh <- *pr:
+	default:
+		s.pendingQueue = append(s.pendingQueue, pr)
+	}
+}
+
+// NextPending sends the next queued request to PendingCh, if any.
+func (s *Server) NextPending() {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	if len(s.pendingQueue) > 0 {
+		next := s.pendingQueue[0]
+		s.pendingQueue = s.pendingQueue[1:]
+		select {
+		case s.PendingCh <- *next:
+		default:
+		}
+	}
 }
