@@ -3,20 +3,23 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 type keyMap struct {
-	Quit      key.Binding
-	Tab       key.Binding
-	ShiftTab  key.Binding
-	Help      key.Binding
-	New       key.Binding
-	Edit      key.Binding
-	Delete    key.Binding
-	Reload    key.Binding
-	Clear     key.Binding
-	Save      key.Binding
-	Send      key.Binding
-	Back      key.Binding
-	Up        key.Binding
-	Down      key.Binding
+	Quit     key.Binding
+	Tab      key.Binding
+	ShiftTab key.Binding
+	Help     key.Binding
+	New      key.Binding
+	Edit     key.Binding
+	Detail   key.Binding
+	Delete   key.Binding
+	Reload   key.Binding
+	Clear    key.Binding
+	Save     key.Binding
+	Send     key.Binding
+	Back     key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Capture  key.Binding
+	Toggle   key.Binding
 }
 
 var keys = keyMap{
@@ -44,9 +47,13 @@ var keys = keyMap{
 		key.WithKeys("e"),
 		key.WithHelp("e", "edit mock"),
 	),
-	Delete: key.NewBinding(
+	Detail: key.NewBinding(
 		key.WithKeys("d"),
-		key.WithHelp("d", "delete mock"),
+		key.WithHelp("d", "detail"),
+	),
+	Delete: key.NewBinding(
+		key.WithKeys("x"),
+		key.WithHelp("x", "delete mock"),
 	),
 	Reload: key.NewBinding(
 		key.WithKeys("r"),
@@ -75,5 +82,13 @@ var keys = keyMap{
 	Down: key.NewBinding(
 		key.WithKeys("down"),
 		key.WithHelp("↓", "down"),
+	),
+	Capture: key.NewBinding(
+		key.WithKeys("i"),
+		key.WithHelp("i", "toggle capture mode"),
+	),
+	Toggle: key.NewBinding(
+		key.WithKeys(" "),
+		key.WithHelp("space", "enable/disable mock"),
 	),
 }

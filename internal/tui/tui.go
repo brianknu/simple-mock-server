@@ -14,11 +14,13 @@ import (
 const (
 	tabMockList = iota
 	tabRequestLog
-	tabMockForm
-	tabCount
+	tabCount    // number of tabs in the tab bar
+	tabMockForm // not in the tab bar; shown as overlay when creating/editing
 )
 
-var tabNames = []string{"Mocks", "Request Log", "Create/Edit"}
+var tabNames = []string{"Mocks", "Request Log"}
+
+type pendingRequestMsg server.PendingRequest
 
 type Model struct {
 	srv       *server.Server
@@ -26,33 +28,61 @@ type Model struct {
 	width     int
 	height    int
 
-	mockList mockListModel
-	reqLog   requestLogModel
-	mockForm mockFormModel
+	mockList   mockListModel
+	reqLog     requestLogModel
+	mockForm   mockFormModel
+	mockPicker mockPickerModel
 
-	showHelp bool
+	showHelp    bool
+	captureMode bool
+	pendingReq  *server.PendingRequest
 }
 
 func NewModel(srv *server.Server) Model {
 	return Model{
-		srv:       srv,
-		activeTab: tabMockList,
-		mockList:  newMockListModel(srv),
-		reqLog:    newRequestLogModel(srv),
-		mockForm:  newMockFormModel(srv),
+		srv:        srv,
+		activeTab:  tabMockList,
+		mockList:   newMockListModel(srv),
+		reqLog:     newRequestLogModel(srv),
+		mockForm:   newMockFormModel(srv),
+		mockPicker: newMockPickerModel(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.reqLog.waitForEntry(),
+		m.waitForSelection(),
 	)
 }
 
-// inputActive returns true when a text input has focus and single-char keys
-// (q, ?, n, etc.) should be forwarded to the input instead of treated as commands.
+func (m Model) waitForSelection() tea.Cmd {
+	return func() tea.Msg {
+		req, ok := <-m.srv.SelectionCh
+		if !ok {
+			return nil
+		}
+		return selectionRequestMsg(req)
+	}
+}
+
+func (m Model) waitForPending() tea.Cmd {
+	return func() tea.Msg {
+		pr, ok := <-m.srv.PendingCh
+		if !ok {
+			return nil
+		}
+		return pendingRequestMsg(pr)
+	}
+}
+
+// inputActive returns true when a text input has focus or a detail overlay is
+// open — single-char keys should not be treated as global commands in either case.
 func (m Model) inputActive() bool {
 	if m.activeTab == tabMockForm && m.mockForm.editing && m.mockForm.focusedField != fieldVerb {
+		return true
+	}
+	if m.activeTab == tabMockList && m.mockList.detailActive() {
 		return true
 	}
 	return false
@@ -60,6 +90,27 @@ func (m Model) inputActive() bool {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// When mock picker is active, delegate everything to it except
+	// selectionDoneMsg which is handled below (arrives after active=false).
+	if m.mockPicker.active {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			m.mockPicker.width = msg.Width
+			m.mockPicker.height = msg.Height - 4
+			return m, nil
+		case newLogEntryMsg:
+			var cmd tea.Cmd
+			m.reqLog, cmd = m.reqLog.Update(msg)
+			return m, cmd
+		default:
+			var cmd tea.Cmd
+			m.mockPicker, cmd = m.mockPicker.Update(msg)
+			return m, cmd
+		}
+	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -72,12 +123,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mockForm.width = msg.Width
 		return m, nil
 
+	case selectionRequestMsg:
+		req := server.SelectionRequest(msg)
+		m.mockPicker.activate(req, m.width, m.height-4)
+		return m, nil
+
+	case selectionDoneMsg:
+		// Re-arm the selection listener. This always arrives after mockPicker.active
+		// has already been set to false, so it must be handled here, not in the
+		// picker-active block above.
+		return m, m.waitForSelection()
+
 	case tea.KeyMsg:
 		// Esc always goes back to mock list from form tabs
 		if key.Matches(msg, keys.Back) {
 			if m.activeTab == tabMockForm {
 				m.mockForm.editing = false
 				m.activeTab = tabMockList
+				// Cancel pending request if any
+				if m.pendingReq != nil {
+					m.pendingReq.ResponseCh <- server.PendingResponse{Cancel: true}
+					m.pendingReq = nil
+					m.srv.NextPending()
+				}
 				return m, nil
 			}
 		}
@@ -99,6 +167,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, keys.ShiftTab) {
 				m.activeTab = (m.activeTab - 1 + tabCount) % tabCount
 				m.onTabSwitch()
+				return m, nil
+			}
+			if key.Matches(msg, keys.Capture) && m.activeTab != tabMockForm {
+				m.captureMode = !m.captureMode
+				m.srv.SetCaptureMode(m.captureMode)
+				if m.captureMode {
+					return m, m.waitForPending()
+				}
 				return m, nil
 			}
 		}
@@ -126,11 +202,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reqLog, cmd = m.reqLog.Update(msg)
 		return m, cmd
 
+	case pendingRequestMsg:
+		pr := server.PendingRequest(msg)
+		m.pendingReq = &pr
+
+		form := newMockFormModel(m.srv)
+		form.width = m.width
+		form.isPendingResponse = true
+		form.pendingInfo = fmt.Sprintf("%s %s", pr.Method, pr.Path)
+		// Set verb from request
+		for i, v := range verbs {
+			if v == pr.Method {
+				form.verbIndex = i
+				break
+			}
+		}
+		form.pathsInput.SetValue(pr.Path)
+		form.startEditing()
+		m.mockForm = form
+		m.activeTab = tabMockForm
+		return m, m.mockForm.Init()
+
 	case mockSavedMsg:
 		m.mockList.mocks = m.srv.Mocks()
 		m.mockList.message = string(msg)
 		m.mockForm.editing = false
 		m.activeTab = tabMockList
+
+		if m.pendingReq != nil {
+			resp := m.mockForm.buildResponse()
+			m.pendingReq.ResponseCh <- resp
+			m.pendingReq = nil
+			m.srv.NextPending()
+			return m, m.waitForPending()
+		}
 		return m, nil
 	}
 
@@ -165,6 +270,18 @@ func (m Model) View() string {
 		return m.helpView()
 	}
 
+	// Mock picker overlay takes over the full screen
+	if m.mockPicker.active {
+		var b strings.Builder
+		b.WriteString(m.tabBar())
+		b.WriteString("\n\n")
+		b.WriteString(m.mockPicker.View())
+		b.WriteString("\n")
+		status := fmt.Sprintf(" :%d | %d mocks loaded | SELECTING MOCK | ? help", m.srv.Port, m.srv.MockCount())
+		b.WriteString(statusBarStyle.Width(m.width).Render(status))
+		return b.String()
+	}
+
 	var b strings.Builder
 
 	// Tab bar
@@ -183,7 +300,14 @@ func (m Model) View() string {
 
 	// Status bar
 	b.WriteString("\n")
-	status := fmt.Sprintf(" :%d | %d mocks loaded | ? help", m.srv.Port, m.srv.MockCount())
+	indicator := ""
+	if m.captureMode {
+		indicator = " | " + captureIndicatorStyle.Render("CAPTURE")
+		if m.pendingReq != nil {
+			indicator += fmt.Sprintf(" | awaiting: %s %s", m.pendingReq.Method, m.pendingReq.Path)
+		}
+	}
+	status := fmt.Sprintf(" :%d | %d mocks loaded%s | ? help", m.srv.Port, m.srv.MockCount(), indicator)
 	b.WriteString(statusBarStyle.Width(m.width).Render(status))
 
 	return b.String()
@@ -214,19 +338,29 @@ func (m Model) helpView() string {
   Mocks Tab
     n                   Create new mock
     e                   Edit selected mock
-    d                   Delete selected mock
+    d                   Show mock details
+    space               Enable/disable mock
+    x                   Delete selected mock
     r                   Reload mocks from disk
 
   Request Log Tab
     c                   Clear log
 
-  Create/Edit Tab
+  Create/Edit Form (opens over Mocks tab)
     ↑/↓                 Cycle between fields
     ←/→                 Cycle HTTP verb (when on Method)
     ctrl+s              Save mock
     esc                 Cancel and go back
 
+  Mock Selection
+    When multiple mocks match the same path+verb,
+    an interactive picker appears on each request.
+    ↑/↓                 Navigate options
+    enter                Select mock
+    esc                  Cancel (returns 404)
+
   General
+    i                   Toggle capture mode
     q / ctrl+c          Quit
 `
 	return titleStyle.Render("Help") + help + "\n\n" + helpStyle.Render("  Press ? to close")

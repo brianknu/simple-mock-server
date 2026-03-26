@@ -17,6 +17,7 @@ type Mock struct {
 	Status           int               `json:"status"`
 	PrintRequestBody bool              `json:"print_request_body"`
 	ResponseTime     int               `json:"response_time"`
+	Disabled         bool              `json:"disabled,omitempty"`
 	SourceFile       string            `json:"-"`
 }
 
@@ -61,7 +62,14 @@ func SaveMockToFS(directory string, m Mock) (string, error) {
 		if len(m.Paths) > 0 {
 			name = strings.ReplaceAll(strings.Trim(m.Paths[0], "/"), "/", "_")
 		}
-		filename = filepath.Join(directory, fmt.Sprintf("%s_%s.json", m.Verb, name))
+		base := filepath.Join(directory, fmt.Sprintf("%s_%s", m.Verb, name))
+		filename = base + ".json"
+		for i := 2; ; i++ {
+			if _, err := os.Stat(filename); os.IsNotExist(err) {
+				break
+			}
+			filename = fmt.Sprintf("%s_%d.json", base, i)
+		}
 	}
 
 	data, err := json.MarshalIndent(m, "", "    ")
