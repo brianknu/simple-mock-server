@@ -29,8 +29,6 @@ func LoadMocksFromFS(directory string) ([]Mock, error) {
 	for _, file := range files {
 		if filepath.Ext(file.Name()) == ".json" {
 			filePath := filepath.Join(directory, file.Name())
-			log.Printf("Using %s\n", filePath)
-
 			content, err := os.ReadFile(filePath)
 			if err != nil {
 				log.Printf("Error reading file %s: %s\n", filePath, err)
