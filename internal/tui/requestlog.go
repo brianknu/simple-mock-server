@@ -45,22 +45,19 @@ func (m requestLogModel) waitForEntry() tea.Cmd {
 	}
 }
 
+// entryAt returns the entry for visual index i (0 = newest).
+func (m requestLogModel) entryAt(i int) server.LogEntry {
+	return m.entries[len(m.entries)-1-i]
+}
+
 func (m requestLogModel) Update(msg tea.Msg) (requestLogModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case newLogEntryMsg:
 		m.entries = append(m.entries, server.LogEntry(msg))
-		// Follow new entries only when already at the bottom
-		maxVisible := m.height - 6
-		if maxVisible < 1 {
-			maxVisible = 10
-		}
-		atBottom := m.cursor == len(m.entries)-2 // cursor was on last entry
-		m.cursor = len(m.entries) - 1
-		if atBottom || len(m.entries) == 1 {
-			if len(m.entries) > maxVisible {
-				m.scroll = len(m.entries) - maxVisible
-			}
-		}
+		// New entries appear at the top; keep cursor at 0 so the user
+		// always sees the latest request without manual scrolling.
+		m.cursor = 0
+		m.scroll = 0
 		return m, m.waitForEntry()
 
 	case tea.KeyMsg:
@@ -70,8 +67,8 @@ func (m requestLogModel) Update(msg tea.Msg) (requestLogModel, tea.Cmd) {
 				m.showDetail = false
 				m.copyMsg = ""
 			case key.Matches(msg, keys.Copy):
-				if m.cursor >= 0 && m.cursor < len(m.entries) {
-					body := m.entries[m.cursor].RequestBody
+				if len(m.entries) > 0 {
+					body := m.entryAt(m.cursor).RequestBody
 					if body == "" {
 						m.copyMsg = "nothing to copy — no request body was logged"
 					} else if err := clipboard.WriteAll(body); err != nil {
@@ -126,7 +123,7 @@ func (m *requestLogModel) clampScroll() {
 
 func (m requestLogModel) View() string {
 	if m.showDetail && len(m.entries) > 0 {
-		return m.detailView(m.entries[m.cursor])
+		return m.detailView(m.entryAt(m.cursor))
 	}
 	return m.listView()
 }
@@ -134,7 +131,8 @@ func (m requestLogModel) View() string {
 func (m requestLogModel) listView() string {
 	var b strings.Builder
 
-	header := fmt.Sprintf("  %-3s %-12s %-8s %-35s %-8s %-10s", "", "TIME", "METHOD", "PATH", "STATUS", "DELAY(ms)")
+	// Mirror the data row layout: "  "(2) + cur(2) + ts(12) + " " + verb(8) + ...
+	header := "  " + "  " + fmt.Sprintf("%-12s", "TIME") + " " + fmt.Sprintf("%-8s", "METHOD") + " " + fmt.Sprintf("%-35s", "PATH") + " " + fmt.Sprintf("%-8s", "STATUS") + " " + "DELAY(ms)"
 	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F8F8F2")).Render(header))
 	b.WriteString("\n")
 	b.WriteString(strings.Repeat("─", min(m.width, 90)))
@@ -155,7 +153,7 @@ func (m requestLogModel) listView() string {
 	}
 
 	for i := m.scroll; i < end; i++ {
-		e := m.entries[i]
+		e := m.entryAt(i)
 		cur := "  "
 		if i == m.cursor {
 			cur = "▸ "
