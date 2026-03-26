@@ -38,7 +38,7 @@ func runHeadless(port int, directory string) {
 		log.Fatalf("Could not start simple-mock-server: %s", err)
 	}
 	mux := router.NewDynamicMux()
-	router.RegisterMocks(mux, mocks, nil)
+	router.RegisterMocks(mux, mocks, router.RouteConfig{})
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Starting server on %s.", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {

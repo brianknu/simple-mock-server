@@ -14,11 +14,11 @@ import (
 const (
 	tabMockList = iota
 	tabRequestLog
-	tabMockForm
-	tabCount
+	tabCount    // number of tabs in the tab bar
+	tabMockForm // not in the tab bar; shown as overlay when creating/editing
 )
 
-var tabNames = []string{"Mocks", "Request Log", "Create/Edit"}
+var tabNames = []string{"Mocks", "Request Log"}
 
 type pendingRequestMsg server.PendingRequest
 
@@ -28,29 +28,42 @@ type Model struct {
 	width     int
 	height    int
 
-	mockList mockListModel
-	reqLog   requestLogModel
-	mockForm mockFormModel
+	mockList   mockListModel
+	reqLog     requestLogModel
+	mockForm   mockFormModel
+	mockPicker mockPickerModel
 
-	showHelp      bool
+	showHelp    bool
 	captureMode bool
-	pendingReq    *server.PendingRequest
+	pendingReq  *server.PendingRequest
 }
 
 func NewModel(srv *server.Server) Model {
 	return Model{
-		srv:       srv,
-		activeTab: tabMockList,
-		mockList:  newMockListModel(srv),
-		reqLog:    newRequestLogModel(srv),
-		mockForm:  newMockFormModel(srv),
+		srv:        srv,
+		activeTab:  tabMockList,
+		mockList:   newMockListModel(srv),
+		reqLog:     newRequestLogModel(srv),
+		mockForm:   newMockFormModel(srv),
+		mockPicker: newMockPickerModel(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.reqLog.waitForEntry(),
+		m.waitForSelection(),
 	)
+}
+
+func (m Model) waitForSelection() tea.Cmd {
+	return func() tea.Msg {
+		req, ok := <-m.srv.SelectionCh
+		if !ok {
+			return nil
+		}
+		return selectionRequestMsg(req)
+	}
 }
 
 func (m Model) waitForPending() tea.Cmd {
@@ -75,6 +88,27 @@ func (m Model) inputActive() bool {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// When mock picker is active, delegate everything to it except
+	// selectionDoneMsg which is handled below (arrives after active=false).
+	if m.mockPicker.active {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			m.mockPicker.width = msg.Width
+			m.mockPicker.height = msg.Height - 4
+			return m, nil
+		case newLogEntryMsg:
+			var cmd tea.Cmd
+			m.reqLog, cmd = m.reqLog.Update(msg)
+			return m, cmd
+		default:
+			var cmd tea.Cmd
+			m.mockPicker, cmd = m.mockPicker.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -85,6 +119,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reqLog.height = msg.Height - 4
 		m.mockForm.width = msg.Width
 		return m, nil
+
+	case selectionRequestMsg:
+		req := server.SelectionRequest(msg)
+		m.mockPicker.activate(req, m.width, m.height-4)
+		return m, nil
+
+	case selectionDoneMsg:
+		// Re-arm the selection listener. This always arrives after mockPicker.active
+		// has already been set to false, so it must be handled here, not in the
+		// picker-active block above.
+		return m, m.waitForSelection()
 
 	case tea.KeyMsg:
 		// Esc always goes back to mock list from form tabs
@@ -222,6 +267,18 @@ func (m Model) View() string {
 		return m.helpView()
 	}
 
+	// Mock picker overlay takes over the full screen
+	if m.mockPicker.active {
+		var b strings.Builder
+		b.WriteString(m.tabBar())
+		b.WriteString("\n\n")
+		b.WriteString(m.mockPicker.View())
+		b.WriteString("\n")
+		status := fmt.Sprintf(" :%d | %d mocks loaded | SELECTING MOCK | ? help", m.srv.Port, m.srv.MockCount())
+		b.WriteString(statusBarStyle.Width(m.width).Render(status))
+		return b.String()
+	}
+
 	var b strings.Builder
 
 	// Tab bar
@@ -284,11 +341,18 @@ func (m Model) helpView() string {
   Request Log Tab
     c                   Clear log
 
-  Create/Edit Tab
+  Create/Edit Form (opens over Mocks tab)
     ↑/↓                 Cycle between fields
     ←/→                 Cycle HTTP verb (when on Method)
     ctrl+s              Save mock
     esc                 Cancel and go back
+
+  Mock Selection
+    When multiple mocks match the same path+verb,
+    an interactive picker appears on each request.
+    ↑/↓                 Navigate options
+    enter                Select mock
+    esc                  Cancel (returns 404)
 
   General
     i                   Toggle capture mode

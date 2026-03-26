@@ -13,6 +13,37 @@ import (
 	"simple-mock-server/internal/router"
 )
 
+// handleCapture blocks the HTTP handler until the TUI user defines a response.
+// It is used both by the NotFoundHandler and when capture mode intercepts a matched route.
+func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, _ := io.ReadAll(r.Body)
+
+	pr := &PendingRequest{
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		Headers:    r.Header.Clone(),
+		Body:       string(bodyBytes),
+		ResponseCh: make(chan PendingResponse, 1),
+	}
+
+	s.EnqueuePending(pr)
+
+	select {
+	case resp := <-pr.ResponseCh:
+		if resp.Cancel {
+			http.NotFound(w, r)
+			return
+		}
+		for k, v := range resp.Headers {
+			w.Header().Set(k, v)
+		}
+		w.WriteHeader(resp.Status)
+		w.Write(resp.Body)
+	case <-r.Context().Done():
+		// Client disconnected; mock will still be saved if user completes the form
+	}
+}
+
 // PendingRequest represents an unmatched HTTP request waiting for the user
 // to define a mock response via the TUI (capture mode).
 type PendingRequest struct {
@@ -31,6 +62,15 @@ type PendingResponse struct {
 	Cancel  bool
 }
 
+// SelectionRequest is sent to the TUI when multiple mocks match a request.
+type SelectionRequest struct {
+	Path        string
+	Verb        string
+	Mocks       []mock.Mock
+	CaptureMode bool // true when capture mode is on; picker shows "Define new" option
+	ResponseCh  chan int // index of selected mock, -1 to cancel, -2 to define new
+}
+
 type Server struct {
 	mu         sync.RWMutex
 	mocks      []mock.Mock
@@ -44,16 +84,19 @@ type Server struct {
 	pendingMu     sync.Mutex
 	PendingCh     chan PendingRequest
 	pendingQueue  []*PendingRequest
+
+	SelectionCh chan SelectionRequest
 }
 
 func New(port int, mocksDir string) *Server {
 	mux := router.NewDynamicMux()
 	s := &Server{
-		mux:       mux,
-		MocksDir:  mocksDir,
-		Port:      port,
-		ReqLog:    NewRequestLog(1000),
-		PendingCh: make(chan PendingRequest, 1),
+		mux:         mux,
+		MocksDir:    mocksDir,
+		Port:        port,
+		ReqLog:      NewRequestLog(1000),
+		PendingCh:   make(chan PendingRequest, 1),
+		SelectionCh: make(chan SelectionRequest, 1),
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: mux,
@@ -65,33 +108,7 @@ func New(port int, mocksDir string) *Server {
 			http.NotFound(w, r)
 			return
 		}
-
-		bodyBytes, _ := io.ReadAll(r.Body)
-
-		pr := &PendingRequest{
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			Headers:    r.Header.Clone(),
-			Body:       string(bodyBytes),
-			ResponseCh: make(chan PendingResponse, 1),
-		}
-
-		s.EnqueuePending(pr)
-
-		select {
-		case resp := <-pr.ResponseCh:
-			if resp.Cancel {
-				http.NotFound(w, r)
-				return
-			}
-			for k, v := range resp.Headers {
-				w.Header().Set(k, v)
-			}
-			w.WriteHeader(resp.Status)
-			w.Write(resp.Body)
-		case <-r.Context().Done():
-			// Client disconnected; mock will still be saved if user completes the form
-		}
+		s.handleCapture(w, r)
 	}
 
 	return s
@@ -118,7 +135,26 @@ func (s *Server) rebuildRoutes() {
 	s.mu.RUnlock()
 
 	s.mux.Clear()
-	router.RegisterMocks(s.mux, mocks, s.ReqLog)
+	router.RegisterMocks(s.mux, mocks, router.RouteConfig{
+		Logger:       s.ReqLog,
+		Selector:     s.selectMock,
+		CaptureCheck: s.CaptureMode,
+		Fallback:     s.handleCapture,
+	})
+}
+
+// selectMock is the MockSelector used in TUI mode. It sends a SelectionRequest
+// to the TUI and blocks until the user picks a mock.
+func (s *Server) selectMock(path string, verb string, mocks []mock.Mock) int {
+	req := SelectionRequest{
+		Path:        path,
+		Verb:        verb,
+		Mocks:       mocks,
+		CaptureMode: s.CaptureMode(),
+		ResponseCh:  make(chan int, 1),
+	}
+	s.SelectionCh <- req
+	return <-req.ResponseCh
 }
 
 // Start begins serving HTTP in a new goroutine.
