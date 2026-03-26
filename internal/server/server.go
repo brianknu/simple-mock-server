@@ -198,6 +198,16 @@ func (s *Server) UpdateMock(index int, m mock.Mock) {
 	s.rebuildRoutes()
 }
 
+func (s *Server) ToggleMock(index int) {
+	s.mu.Lock()
+	if index >= 0 && index < len(s.mocks) {
+		s.mocks[index].Disabled = !s.mocks[index].Disabled
+		mock.SaveMockToFS(s.MocksDir, s.mocks[index])
+	}
+	s.mu.Unlock()
+	s.rebuildRoutes()
+}
+
 func (s *Server) DeleteMock(index int) {
 	s.mu.Lock()
 	if index >= 0 && index < len(s.mocks) {

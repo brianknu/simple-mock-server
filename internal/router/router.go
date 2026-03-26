@@ -44,6 +44,9 @@ func RegisterMocks(mux *DynamicMux, mocks []mock.Mock, cfg RouteConfig) {
 	grouped := make(map[string][]mock.Mock)
 
 	for _, m := range mocks {
+		if m.Disabled {
+			continue
+		}
 		for _, path := range m.Paths {
 			grouped[path] = append(grouped[path], m)
 		}

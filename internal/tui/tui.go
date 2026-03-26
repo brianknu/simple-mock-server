@@ -76,10 +76,13 @@ func (m Model) waitForPending() tea.Cmd {
 	}
 }
 
-// inputActive returns true when a text input has focus and single-char keys
-// (q, ?, n, etc.) should be forwarded to the input instead of treated as commands.
+// inputActive returns true when a text input has focus or a detail overlay is
+// open — single-char keys should not be treated as global commands in either case.
 func (m Model) inputActive() bool {
 	if m.activeTab == tabMockForm && m.mockForm.editing && m.mockForm.focusedField != fieldVerb {
+		return true
+	}
+	if m.activeTab == tabMockList && m.mockList.detailActive() {
 		return true
 	}
 	return false
@@ -335,7 +338,9 @@ func (m Model) helpView() string {
   Mocks Tab
     n                   Create new mock
     e                   Edit selected mock
-    d                   Delete selected mock
+    d                   Show mock details
+    space               Enable/disable mock
+    x                   Delete selected mock
     r                   Reload mocks from disk
 
   Request Log Tab

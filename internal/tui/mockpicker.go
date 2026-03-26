@@ -134,7 +134,8 @@ func (m mockPickerModel) View() string {
 			}
 		}
 
-		line := fmt.Sprintf("%s%-4d %-8d %-12d %-10s %s", cursor, i+1, mk.Status, mk.ResponseTime, source, bodyPreview)
+		status := statusStyle(mk.Status).Render(fmt.Sprintf("%-8d", mk.Status))
+		line := fmt.Sprintf("%s%-4d %s %-12d %-10s %s", cursor, i+1, status, mk.ResponseTime, source, bodyPreview)
 
 		if i == m.cursor {
 			line = lipgloss.NewStyle().Background(lipgloss.Color("236")).Render(line)

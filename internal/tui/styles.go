@@ -71,6 +71,21 @@ var (
 				Padding(0, 1)
 )
 
+func statusStyle(code int) lipgloss.Style {
+	switch {
+	case code >= 500:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF5555")).Bold(true)
+	case code >= 400:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB86C")).Bold(true)
+	case code >= 300:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#F1FA8C")).Bold(true)
+	case code >= 200:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#50FA7B")).Bold(true)
+	default:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#6272A4"))
+	}
+}
+
 func methodStyle(method string) lipgloss.Style {
 	switch method {
 	case "GET":
