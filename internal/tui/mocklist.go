@@ -123,7 +123,7 @@ func (m mockListModel) View() string {
 	}
 
 	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("  n: new  e: edit  d: delete  r: reload  ↑/↓: navigate"))
+	b.WriteString(helpStyle.Render("  n: new  e: edit  d: delete  r: reload  i: capture  ↑/↓: navigate"))
 
 	return b.String()
 }
