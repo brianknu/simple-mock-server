@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -105,7 +106,18 @@ func New(port int, mocksDir string) *Server {
 
 	mux.NotFoundHandler = func(w http.ResponseWriter, r *http.Request) {
 		if !s.CaptureMode() {
-			http.NotFound(w, r)
+			s.ReqLog.Log(router.RequestEntry{
+				Method: r.Method,
+				Path:   r.RequestURI,
+				Status: http.StatusNotFound,
+			})
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":  "no mock defined for this route",
+				"method": r.Method,
+				"path":   r.URL.Path,
+			})
 			return
 		}
 		s.handleCapture(w, r)

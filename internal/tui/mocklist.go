@@ -93,7 +93,8 @@ func (m mockListModel) View() string {
 func (m mockListModel) listView() string {
 	var b strings.Builder
 
-	header := fmt.Sprintf("  %-3s %-8s %-40s %-8s %s", "", "METHOD", "PATHS", "STATUS", "DELAY(ms)")
+	// Mirror the data row layout exactly: "  "(cursor) + dot(1) + " " + verb(8) + " " + paths(40) + ...
+	header := "  " + " " + " " + fmt.Sprintf("%-8s", "METHOD") + " " + fmt.Sprintf("%-40s", "PATHS") + " " + fmt.Sprintf("%-8s", "STATUS") + " " + "DELAY(ms)"
 	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F8F8F2")).Render(header))
 	b.WriteString("\n")
 	b.WriteString(strings.Repeat("─", min(m.width, 80)))
