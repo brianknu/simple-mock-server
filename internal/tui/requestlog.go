@@ -233,11 +233,17 @@ func (m requestLogModel) detailView(e server.LogEntry) string {
 		// Pretty-print if valid JSON
 		var js any
 		if err := json.Unmarshal([]byte(body), &js); err == nil {
-			if pretty, err := json.MarshalIndent(js, "  ", "  "); err == nil {
+			if pretty, err := json.MarshalIndent(js, "", "  "); err == nil {
 				body = string(pretty)
 			}
 		}
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#50FA7B")).Render("  " + strings.ReplaceAll(body, "\n", "\n  ")))
+		// Render each line individually — lipgloss misaligns multiline strings
+		// when passed as a single Render call.
+		lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#50FA7B"))
+		for _, line := range strings.Split(body, "\n") {
+			b.WriteString(lineStyle.Render("  " + line))
+			b.WriteString("\n")
+		}
 	}
 
 	b.WriteString("\n\n")
