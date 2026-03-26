@@ -236,6 +236,18 @@ func (s *Server) ReloadMocks() error {
 func (s *Server) MockCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	n := 0
+	for _, m := range s.mocks {
+		if !m.Disabled {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Server) TotalMockCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return len(s.mocks)
 }
 

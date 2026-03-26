@@ -277,7 +277,7 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 		b.WriteString(m.mockPicker.View())
 		b.WriteString("\n")
-		status := fmt.Sprintf(" :%d | %d mocks loaded | SELECTING MOCK | ? help", m.srv.Port, m.srv.MockCount())
+		status := fmt.Sprintf(" :%d | %d/%d mocks active | SELECTING MOCK | ? help", m.srv.Port, m.srv.MockCount(), m.srv.TotalMockCount())
 		b.WriteString(statusBarStyle.Width(m.width).Render(status))
 		return b.String()
 	}
@@ -307,7 +307,7 @@ func (m Model) View() string {
 			indicator += fmt.Sprintf(" | awaiting: %s %s", m.pendingReq.Method, m.pendingReq.Path)
 		}
 	}
-	status := fmt.Sprintf(" :%d | %d mocks loaded%s | ? help", m.srv.Port, m.srv.MockCount(), indicator)
+	status := fmt.Sprintf(" :%d | %d/%d mocks active%s | ? help", m.srv.Port, m.srv.MockCount(), m.srv.TotalMockCount(), indicator)
 	b.WriteString(statusBarStyle.Width(m.width).Render(status))
 
 	return b.String()
