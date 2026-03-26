@@ -39,6 +39,24 @@ type RouteConfig struct {
 	Fallback     http.HandlerFunc // called when selector returns -2 (define new)
 }
 
+// writeErrorJSON writes a JSON error response and optionally logs it.
+func writeErrorJSON(w http.ResponseWriter, r *http.Request, status int, message string, logger RequestLogger) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error":  message,
+		"method": r.Method,
+		"path":   r.URL.Path,
+	})
+	if logger != nil {
+		logger.Log(RequestEntry{
+			Method: r.Method,
+			Path:   r.RequestURI,
+			Status: status,
+		})
+	}
+}
+
 func RegisterMocks(mux *DynamicMux, mocks []mock.Mock, cfg RouteConfig) {
 	// Group mocks by path
 	grouped := make(map[string][]mock.Mock)
@@ -72,7 +90,7 @@ func RegisterMocks(mux *DynamicMux, mocks []mock.Mock, cfg RouteConfig) {
 					cfg.Fallback(w, r)
 					return
 				}
-				w.WriteHeader(http.StatusMethodNotAllowed)
+				writeErrorJSON(w, r, http.StatusMethodNotAllowed, "method not allowed for this route", cfg.Logger)
 				return
 			}
 
@@ -90,7 +108,7 @@ func RegisterMocks(mux *DynamicMux, mocks []mock.Mock, cfg RouteConfig) {
 					cfg.Fallback(w, r)
 					return
 				case idx < 0 || idx >= len(matches):
-					http.NotFound(w, r)
+					writeErrorJSON(w, r, http.StatusNotFound, "no mock selected", cfg.Logger)
 					return
 				default:
 					serveMock(w, r, matches[idx], cfg.Logger)
